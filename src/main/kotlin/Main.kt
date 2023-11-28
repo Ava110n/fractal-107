@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import kotlin.math.sqrt
@@ -19,10 +20,8 @@ fun App() {
     var text by remember { mutableStateOf("Hello, World!") }
 
     Canvas(modifier = Modifier.fillMaxSize()){
-        var scales = Scales(this.size.width.toInt(), this.size.height.toInt(),
-        -10.0, -5.0,5.0)
-        scales.xMax = 10.0
-        draw_Mandelbrot(scales)
+
+        draw_Mandelbrot(this)
 
     }
 }
@@ -33,20 +32,18 @@ fun main() = application {
     }
 }
 open class Scales(var w: Int = 0, var h: Int = 0,
-    var xMin: Double = 0.0, //var xMax: Double = 0.0,
-    var yMin: Double = 0.0, var yMax: Double = 0.0){
+    var xMin: Double = -5.0, var xMax: Double = 5.0,
+    var yMin: Double = -5.0, var yMax: Double = 5.0){
 
-    var xMax: Double
+    /*var xMax: Double
         set(value){xMax = value}
-        get() = xMax
+        get() = xMax*/
 
 }
-class Decart(var x: Float,var y: Float):Scales(){
-
-    fun scrToDec(s: Screen):Decart{
-        println(xMax)
-        var x = s.x*(xMax-xMin)/w+xMin
-        var y = yMax - s.y*(yMax-yMin)/h
+class Decart(var x: Float,var y: Float){
+    fun scrToDec(s: Screen, scales: Scales):Decart{
+        var x = s.x*(scales.xMax-scales.xMin)/scales.w+scales.xMin
+        var y = scales.yMax - s.y*(scales.yMax-scales.yMin)/scales.h
         return Decart(x.toFloat(),y.toFloat())
     }
 
@@ -90,19 +87,23 @@ fun Mandelbrot(d: Decart):Int{
     }
     return iter
 }
-fun draw_Mandelbrot(){
+fun draw_Mandelbrot(scope: DrawScope){
+    var scales = Scales(scope.size.width.toInt(), scope.size.height.toInt(),
+        -5.0, 5.0,-5.0, 5.0)
+    //scales.xMax = 10.0
+
     for(i in 0..scales.w ){
         for(j in 0 .. scales.h){
             var s = Screen(i,j)
             var d = Decart(0f,0f)
-            d = d.scrToDec(s)
-            println("${s.x} ${s.y} : ${d.x} ${d.y}")
+            d = d.scrToDec(s, scales)
+            //println("${s.x} ${s.y} : ${d.x} ${d.y}")
             var clr = Mandelbrot(d)
             if(clr==1000){
-                drawCircle(Color.White, radius = 1f,
+                scope.drawCircle(Color.White, radius = 1f,
                     center = Offset(i.toFloat(),j.toFloat()))
             }
-            else(drawCircle(Color.Black, radius = 1f,
+            else(scope.drawCircle(Color.Black, radius = 1f,
                 center = Offset(i.toFloat(),j.toFloat())))
         }
     }
