@@ -6,23 +6,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import kotlin.math.sqrt
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 @Preview
 fun App() {
-    var text by remember { mutableStateOf("Hello, World!") }
+    var scales by remember { mutableStateOf(Scales(0f,0f,-2.0,2.0,-2.0,2.0)) }
+    var scroll by remember { mutableStateOf(false)}
 
-    Canvas(modifier = Modifier.fillMaxSize()){
-
-        draw_Mandelbrot(this)
-
+    Canvas(modifier = Modifier.fillMaxSize().onPointerEvent(PointerEventType.Scroll){
+        scales.w = this.size.width.toFloat()
+        scales.h = this.size.height.toFloat()
+        var pos = it.changes.first().position
+        scales.rescale(pos, 0.9)
+        scroll = true
+        //println(scroll)
+        //draw_Mandelbrot(this., scales)
+    }){
+        scales.w = this.size.width
+        scales.h = this.size.height
+        draw_Mandelbrot(this, scales)
+        println(scroll)
+        scroll = false
     }
 }
 
@@ -31,28 +46,64 @@ fun main() = application {
         App()
     }
 }
-open class Scales(var w: Int = 0, var h: Int = 0,
+
+class Scales(var w: Float = 0f, var h: Float = 0f,
     var xMin: Double = -5.0, var xMax: Double = 5.0,
     var yMin: Double = -5.0, var yMax: Double = 5.0){
 
-    /*var xMax: Double
-        set(value){xMax = value}
-        get() = xMax*/
+    fun rescale(pos: Offset, k: Double){
+        var sxMin = pos.x-this.w*k/2
+        var sxMax = pos.x+this.w*k/2
+        if(pos.x - this.w*k/2 < 0){
+            sxMax += this.w*k/2-pos.x
+            sxMin = 0.0
+        }
+        if(pos.x + this.w*k/2 > this.w){
+            sxMin += this.w-pos.x-this.w*k/2
+            sxMax = this.w*k
+        }
 
-}
-class Decart(var x: Float,var y: Float){
-    fun scrToDec(s: Screen, scales: Scales):Decart{
-        var x = s.x*(scales.xMax-scales.xMin)/scales.w+scales.xMin
-        var y = scales.yMax - s.y*(scales.yMax-scales.yMin)/scales.h
-        return Decart(x.toFloat(),y.toFloat())
+        var syMin = pos.y+this.h*k/2
+        var syMax = pos.y-this.h*k/2
+        if(pos.y - this.h*k/2 < 0){
+            syMin += this.h*k/2-pos.y
+            syMax = 0.0
+        }
+        if(pos.y + this.h*k/2 > this.h){
+            syMax += this.h-pos.y-this.h*k/2
+            syMin = this.h*k
+        }
+        var oldScale = this
+        this.xMin = Screen(sxMin.toFloat(), 0f).scrToDec(oldScale).x.toDouble()
+        this.xMax = Screen(sxMax.toFloat(), 0f).scrToDec(oldScale).x.toDouble()
+        this.yMin = Screen(0f, syMin.toFloat()).scrToDec(oldScale).y.toDouble()
+        this.yMax = Screen(0f, syMax.toFloat()).scrToDec(oldScale).y.toDouble()
+
     }
 
 }
-class Screen(var x: Int,var y: Int):Scales(){
-    fun decToScr(d: Decart):Screen{
-        var x = (d.x-xMin)*w/(xMax-xMin)
-        var y = (yMax-d.y)*h/(yMax-yMin)
-        return Screen(x.toInt(),y.toInt())
+class Decart(var x: Float,var y: Float){
+    fun scrToDec(scales: Scales):Decart{
+        var x = this.x*(scales.xMax-scales.xMin)/scales.w+scales.xMin
+        var y = scales.yMax - this.y*(scales.yMax-scales.yMin)/scales.h
+        return Decart(x.toFloat(),y.toFloat())
+    }
+    fun decToScr(d: Decart, scales: Scales):Screen{
+        var x = (d.x-scales.xMin)*scales.w/(scales.xMax-scales.xMin)
+        var y = (scales.yMax-d.y)*scales.h/(scales.yMax-scales.yMin)
+        return Screen(x.toFloat(),y.toFloat())
+    }
+}
+class Screen(var x: Float, var y: Float){
+    fun decToScr(d: Decart, scales: Scales):Screen{
+        var x = (d.x-scales.xMin)*scales.w/(scales.xMax-scales.xMin)
+        var y = (scales.yMax-d.y)*scales.h/(scales.yMax-scales.yMin)
+        return Screen(x.toFloat(),y.toFloat())
+    }
+    fun scrToDec(scales: Scales):Decart{
+        var x = this.x*(scales.xMax-scales.xMin)/scales.w+scales.xMin
+        var y = scales.yMax - this.y*(scales.yMax-scales.yMin)/scales.h
+        return Decart(x.toFloat(),y.toFloat())
     }
 }
 class Complex(var Re: Double, var Im: Double){
@@ -87,16 +138,15 @@ fun Mandelbrot(d: Decart):Int{
     }
     return iter
 }
-fun draw_Mandelbrot(scope: DrawScope){
-    var scales = Scales(scope.size.width.toInt(), scope.size.height.toInt(),
-        -5.0, 5.0,-5.0, 5.0)
+fun draw_Mandelbrot(scope: DrawScope, scales: Scales){
+    //var scales = Scales(scope.size.width.toInt(), scope.size.height.toInt(),
+        //-2.0, 2.0,-2.0, 2.0)
     //scales.xMax = 10.0
 
-    for(i in 0..scales.w ){
-        for(j in 0 .. scales.h){
-            var s = Screen(i,j)
-            var d = Decart(0f,0f)
-            d = d.scrToDec(s, scales)
+    for(i in 0..scales.w.toInt() ){
+        for(j in 0 .. scales.h.toInt()){
+            var s = Screen(i.toFloat(),j.toFloat())
+            var d = s.scrToDec(scales)
             //println("${s.x} ${s.y} : ${d.x} ${d.y}")
             var clr = Mandelbrot(d)
             if(clr==1000){
